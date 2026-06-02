@@ -25,6 +25,7 @@ const STORAGE_KEYS = {
   budgets: "cicco-budget-category-budgets-v1",
   recurring: "cicco-budget-recurring-v1",
   theme: "cicco-budget-theme-v1",
+  currency: "cicco-budget-currency-v1",
 };
 
 const transactionCategories = [
@@ -39,6 +40,27 @@ const transactionCategories = [
   "Savings",
   "Travel",
   "Other",
+];
+
+const currencyOptions = [
+  {
+    code: "EUR",
+    label: "Euro",
+    symbol: "€",
+    locale: "de-AT",
+  },
+  {
+    code: "USD",
+    label: "US Dollar",
+    symbol: "$",
+    locale: "en-US",
+  },
+  {
+    code: "GBP",
+    label: "British Pound",
+    symbol: "£",
+    locale: "en-GB",
+  },
 ];
 
 const initialTransactionForm = {
@@ -185,6 +207,10 @@ function App() {
     loadFromStorage(STORAGE_KEYS.theme, "light")
   );
 
+  const [currency, setCurrency] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.currency, "EUR")
+  );
+
   const [transactionForm, setTransactionForm] = useState(initialTransactionForm);
   const [goalForm, setGoalForm] = useState(initialGoalForm);
   const [budgetForm, setBudgetForm] = useState(initialBudgetForm);
@@ -201,6 +227,8 @@ function App() {
   const [errors, setErrors] = useState(initialErrors);
   const [toast, setToast] = useState(null);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+
+  const formatMoney = (value) => formatCurrency(value, currency);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.transactions, JSON.stringify(transactions));
@@ -224,6 +252,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(theme));
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.currency, JSON.stringify(currency));
+  }, [currency]);
 
   const availableMonths = useMemo(() => {
     const monthKeys = transactions.map((transaction) =>
@@ -338,20 +370,22 @@ function App() {
       insights.push(
         `Your biggest spending category this month is ${
           biggestCategory.category
-        } at ${formatCurrency(biggestCategory.amount)}.`
+        } at ${formatCurrency(biggestCategory.amount, currency)}.`
       );
     }
 
     if (monthlyTotals.balance >= 0) {
       insights.push(
         `You are currently positive by ${formatCurrency(
-          monthlyTotals.balance
+          monthlyTotals.balance,
+          currency
         )} for ${formatMonthLabel(selectedMonth)}.`
       );
     } else {
       insights.push(
         `Your expenses are currently ${formatCurrency(
-          Math.abs(monthlyTotals.balance)
+          Math.abs(monthlyTotals.balance),
+          currency
         )} above your income this month.`
       );
     }
@@ -373,7 +407,8 @@ function App() {
     if (activeRecurringTotal > 0) {
       insights.push(
         `Your active recurring payments total ${formatCurrency(
-          activeRecurringTotal
+          activeRecurringTotal,
+          currency
         )} per month.`
       );
     }
@@ -385,6 +420,7 @@ function App() {
     monthlyTotals,
     activeRecurringTotal,
     selectedMonth,
+    currency,
   ]);
 
   function showToast(message, type = "success") {
@@ -612,6 +648,7 @@ function App() {
       budgets,
       recurringPayments,
       theme,
+      currency,
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
@@ -650,6 +687,7 @@ function App() {
         setBudgets(importedData.budgets || []);
         setRecurringPayments(importedData.recurringPayments || []);
         setTheme(importedData.theme || "light");
+        setCurrency(importedData.currency || "EUR");
         setSearchTerm("");
         resetEditingState();
         showToast("Backup imported successfully.");
@@ -753,7 +791,9 @@ function App() {
                   setTheme((currentTheme) => {
                     const nextTheme = currentTheme === "dark" ? "light" : "dark";
                     showToast(
-                      nextTheme === "dark" ? "Dark mode enabled." : "Light mode enabled."
+                      nextTheme === "dark"
+                        ? "Dark mode enabled."
+                        : "Light mode enabled."
                     );
                     return nextTheme;
                   });
@@ -762,6 +802,23 @@ function App() {
                 {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
                 {theme === "dark" ? "Light mode" : "Dark mode"}
               </button>
+
+              <label className="currency-control">
+                <span>Currency</span>
+                <select
+                  value={currency}
+                  onChange={(event) => {
+                    setCurrency(event.target.value);
+                    showToast(`Currency changed to ${event.target.value}.`);
+                  }}
+                >
+                  {currencyOptions.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.symbol} {option.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <button
                 type="button"
@@ -794,21 +851,21 @@ function App() {
         <section className="stats-grid">
           <StatCard
             title="Income"
-            value={formatCurrency(monthlyTotals.income)}
+            value={formatMoney(monthlyTotals.income)}
             description="Money entering the kingdom"
             icon={<TrendingUp size={24} />}
           />
 
           <StatCard
             title="Expenses"
-            value={formatCurrency(monthlyTotals.expenses)}
+            value={formatMoney(monthlyTotals.expenses)}
             description="Budget goblins detected"
             icon={<TrendingDown size={24} />}
           />
 
           <StatCard
             title="Balance"
-            value={formatCurrency(monthlyTotals.balance)}
+            value={formatMoney(monthlyTotals.balance)}
             description={
               monthlyTotals.balance >= 0
                 ? "Still standing. Iconic."
@@ -821,7 +878,7 @@ function App() {
           <StatCard
             title="Goal Progress"
             value={`${totalGoalProgress}%`}
-            description={`${formatCurrency(totalGoalSaved)} saved of ${formatCurrency(
+            description={`${formatMoney(totalGoalSaved)} saved of ${formatMoney(
               totalGoalTarget
             )}`}
             icon={<PiggyBank size={24} />}
@@ -933,7 +990,7 @@ function App() {
                       <div className="category-item" key={item.category}>
                         <div className="category-item-header">
                           <span>{item.category}</span>
-                          <strong>{formatCurrency(item.amount)}</strong>
+                          <strong>{formatMoney(item.amount)}</strong>
                         </div>
 
                         <div className="progress-track">
@@ -943,6 +1000,88 @@ function App() {
                           />
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Panel>
+
+            <Panel kicker="Savings goals" title="Goal tracker">
+              {goals.length === 0 ? (
+                <EmptyState text="No savings goals yet. Add one to start tracking progress." />
+              ) : (
+                <div className="goal-list">
+                  {goals.map((goal) => {
+                    const progress =
+                      goal.targetAmount > 0
+                        ? Math.min(
+                            Math.round(
+                              (Number(goal.currentAmount) /
+                                Number(goal.targetAmount)) *
+                                100
+                            ),
+                            100
+                          )
+                        : 0;
+
+                    return (
+                      <article className="goal-card" key={goal.id}>
+                        <div className="goal-header">
+                          <div>
+                            <h3>{goal.title}</h3>
+                            <p>
+                              {formatMoney(goal.currentAmount)} of{" "}
+                              {formatMoney(goal.targetAmount)}
+                              {goal.deadline
+                                ? ` · Deadline: ${formatDate(goal.deadline)}`
+                                : ""}
+                            </p>
+                          </div>
+
+                          <strong>{progress}%</strong>
+                        </div>
+
+                        <div className="progress-track">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+
+                        <div className="card-actions">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            onClick={() => {
+                              setEditingGoalId(goal.id);
+                              setGoalForm({
+                                title: goal.title,
+                                targetAmount: String(goal.targetAmount),
+                                currentAmount: String(goal.currentAmount),
+                                deadline: goal.deadline,
+                              });
+                              clearErrors("goal");
+                            }}
+                            aria-label={`Edit ${goal.title}`}
+                          >
+                            <Edit3 size={17} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="icon-button danger"
+                            onClick={() => {
+                              setGoals((current) =>
+                                current.filter((item) => item.id !== goal.id)
+                              );
+                              showToast("Savings goal deleted.");
+                            }}
+                            aria-label={`Delete ${goal.title}`}
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </div>
+                      </article>
                     );
                   })}
                 </div>
@@ -965,8 +1104,8 @@ function App() {
                         <div>
                           <h3>{budget.category}</h3>
                           <p>
-                            {formatCurrency(budget.spent)} of{" "}
-                            {formatCurrency(budget.limit)}
+                            {formatMoney(budget.spent)} of{" "}
+                            {formatMoney(budget.limit)}
                           </p>
                         </div>
 
@@ -982,8 +1121,8 @@ function App() {
 
                       <p className="budget-status">
                         {budget.isOverBudget
-                          ? `${formatCurrency(Math.abs(budget.remaining))} over budget`
-                          : `${formatCurrency(budget.remaining)} remaining`}
+                          ? `${formatMoney(Math.abs(budget.remaining))} over budget`
+                          : `${formatMoney(budget.remaining)} remaining`}
                       </p>
 
                       <div className="card-actions">
@@ -1025,7 +1164,7 @@ function App() {
 
             <Panel
               kicker="Recurring payments"
-              title={`Monthly total: ${formatCurrency(activeRecurringTotal)}`}
+              title={`Monthly total: ${formatMoney(activeRecurringTotal)}`}
             >
               {recurringPayments.length === 0 ? (
                 <EmptyState text="No recurring payments yet. Add rent, subscriptions, bills, or other monthly goblins." />
@@ -1041,8 +1180,8 @@ function App() {
                       <div>
                         <h3>{payment.title}</h3>
                         <p>
-                          {formatCurrency(payment.amount)} · {payment.category} ·
-                          due day {payment.dueDay}
+                          {formatMoney(payment.amount)} · {payment.category} · due
+                          day {payment.dueDay}
                         </p>
                         {payment.note && <p>{payment.note}</p>}
                       </div>
@@ -1137,7 +1276,7 @@ function App() {
                       <div className="transaction-side">
                         <strong className={`amount ${transaction.type}`}>
                           {transaction.type === "income" ? "+" : "-"}
-                          {formatCurrency(transaction.amount)}
+                          {formatMoney(transaction.amount)}
                         </strong>
 
                         <div className="card-actions">
@@ -1735,10 +1874,14 @@ function getDateForDueDay(monthKey, dueDay) {
   )}`;
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("de-AT", {
+function formatCurrency(value, currencyCode = "EUR") {
+  const selectedCurrency =
+    currencyOptions.find((currency) => currency.code === currencyCode) ||
+    currencyOptions[0];
+
+  return new Intl.NumberFormat(selectedCurrency.locale, {
     style: "currency",
-    currency: "EUR",
+    currency: selectedCurrency.code,
   }).format(value || 0);
 }
 
